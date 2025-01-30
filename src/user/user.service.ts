@@ -1,57 +1,59 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import * as fs from 'fs';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { User } from './user.model';
 
 @Injectable()
 export class UserService {
-  private users: User[] = []; // Fake database
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {}
 
-  constructor() {
-    this.loadUsers(); // Uygulama başlatıldığında verileri yükle
+  async createUser(
+    name: string,
+    email: string,
+    age: number,
+    address: string,
+    role: string,
+  ): Promise<User> {
+    const newUser = this.userRepository.create({ name, email, age, address, role });
+    return this.userRepository.save(newUser);
   }
 
-  // JSON dosyasından kullanıcıları yükle
-  private loadUsers() {
-    try {
-      const data = fs.readFileSync('users.json', 'utf-8');
-      this.users = JSON.parse(data); // json dosyasından veri okuma
-    } catch (error) {
-      this.users = []; // Dosya yoksa yeni bir kullanıcı listesi oluştur
-    }
+  async getAllUsers(): Promise<User[]> {
+    return this.userRepository.find();
   }
 
-  // Kullanıcıları JSON dosyasına kaydet users.json a kaydetme bölümü 
-  private saveUsers() {
-    fs.writeFileSync('users.json', JSON.stringify(this.users, null, 2)); // json dosyasına veriyi yazdırma
-  }
+  async deleteUser(id: number): Promise<string> {
+    const result = await this.userRepository.delete(id);
 
-  // Yeni kullanıcı oluştur ve diziye ekle
-  createUser(name: string, email: string): User { //POST bölümü aldığı parametreler ile yeni kullanıcı postluyor
-    const newUser: User = {
-      id: Date.now(), // ID
-      name,
-      email,
-    };
-    this.users.push(newUser); // user listesine ekleme bölümü
-    this.saveUsers(); // json dosyasına kaydetme bölümü
-    return newUser; // kullanıcıyı returnla
-  }
-
-  // GET bölümü, Tüm kullanıcıları listele
-  getAllUsers(): User[] {
-    return this.users;
-  }
-
-  // DELETE bölümü Kullanıcıyı id'ye göre siliyor
-  deleteUser(id: number): string {
-    const index = this.users.findIndex((user) => user.id === id);
-
-    if (index === -1) {
-      throw new NotFoundException(`User with id ${id} not found`); // try catch 
+    if (result.affected === 0) {
+      throw new NotFoundException(`${id} bu id ile ilgili bir kayıt bulunamadı`);
     }
 
-    this.users.splice(index, 1); // Kullanıcıyı sil
-    this.saveUsers(); // Güncellenen kullanıcı listesini JSON dosyasına kaydetme bölümü users.json a kaydediiyor
-    return `User with id ${id} deleted successfully.`; // tebrikler sildin
+    return `bu ${id}'deki kayıt silindi.`;
   }
 }
+
+// önceki yapıdan farklı olarak postgresql işlemlerini yapabilmek için typeorm yi importluyoruz
+
+// fake database kullanmak yerine postgresql e geçtiğimiz için:
+/*export class UserService {
+  private users: User[] = []; // Fake database  yerine
+
+   export class UserService {
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {} kullanıyoruz 
+   
+
+  Repository yapısı typeorm nin veritabanındaki entitylere erişmesi için kullanılan bir yapıymış ondan dolayı crud işlemlerini yapmak için
+  kullanıyoruz 
+
+  ai dan aldığım kısım:-------
+  Repository Erişimi: NestJS'teki servislerde, veritabanı işlemlerini gerçekleştirmek için repository'e ihtiyacınız vardır. User entity'si üzerinde işlem yapabilmek için UserRepository'yi kullanmanız gerekir.
+  Bağımlılık Enjeksiyonu (DI): @InjectRepository(User) ile, UserRepository'yi NestJS'in dependency injection sistemine dahil etmiş oluyorsunuz. NestJS, UserRepository'yi otomatik olarak constructor'a inject eder.
+  Kodu Temiz ve Modüler Tutmak: Bağımlılığı constructor üzerinden inject ederek, sınıfın bağımlılıklarını açıkça belirlemiş oluyorsunuz ve sınıfın yönetimi daha modüler hale gelir. Bu sayede, bu repository'nin yönetimi NestJS'in sorumluluğuna verilmiş olur.
+  */
