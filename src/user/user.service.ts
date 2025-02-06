@@ -1,39 +1,74 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './user.model';
+import * as bcrypt from 'bcrypt';
+import { User } from './entities/user.entity';
+import { UserRole } from './entities/user-role.entity';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UserService {
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    @InjectRepository(User) private userRepo: Repository<User>,
+    @InjectRepository(UserRole) private roleRepo: Repository<UserRole>,
   ) {}
 
-  async createUser(
-    name: string,
-    email: string,
-    age: number,
-    address: string,
-    role: string,
-  ): Promise<User> {
-    const newUser = this.userRepository.create({ name, email, age, address, role });
-    return this.userRepository.save(newUser);
+  async validateUser(username: string, password: string): Promise<User | null> {
+    const user = await this.userRepo.findOne({
+      where: { username },
+      relations: ['userRole'], 
+    });
+  
+    if (!user) return null;
+  
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    return isPasswordValid ? user : null;
   }
 
-  async getAllUsers(): Promise<User[]> {
-    return this.userRepository.find();
+  async createUser(dto: CreateUserDto) {
+    const existing = await this.userRepo.findOne({ 
+      where: [{ username: dto.username }, { email: dto.email }] 
+    });
+    if (existing) throw new ConflictException('Kullanıcı hali hazırda mevcut');
+
+    const user = this.userRepo.create({
+      ...dto,
+      password: await bcrypt.hash(dto.password, 10), //kullanıcının şifresini burada hashliyoruz veritabanına hashlenerek kaydediliyorr
+    });
+    
+    const savedUser = await this.userRepo.save(user);
+    await this.roleRepo.save({ role: dto.role, user: savedUser });
+    
+    return savedUser;
   }
 
-  async deleteUser(id: number): Promise<string> {
-    const result = await this.userRepository.delete(id);
+  async findAll() {
+    return this.userRepo.find({ relations: ['userRole'] });
+  }
 
-    if (result.affected === 0) {
-      throw new NotFoundException(`${id} bu id ile ilgili bir kayıt bulunamadı`);
+  
+
+  async deleteUser(id: number) {
+    const user = await this.userRepo.findOne({ where: { id }, relations: ['userRole'] });
+    if (!user) {
+      throw new NotFoundException('Kullanıcı bulunamadı');
     }
 
-    return `bu ${id}'deki kayıt silindi.`;
+    
+    await this.roleRepo.delete({ user: { id: user.id } }); // Önce user_role tablosundaki ilgili kayıtları siliyoruz ki yabancı anahtar ile 
+    //bağlı olduğu için iki yerden kayıt silmeden önce buradan siliyoruz
+    
+    const result = await this.userRepo.delete(id); // Sonra buradaki tablodan siliyoruz
+    return result;
   }
+
+
+
+  //ESKİ METHOD
+  /*async deleteUser(id: number) {   
+    const result = await this.userRepo.delete(id);
+    return result;
+  }*/
 }
 
 // önceki yapıdan farklı olarak postgresql işlemlerini yapabilmek için typeorm yi importluyoruz
