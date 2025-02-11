@@ -1,25 +1,19 @@
-// src/auth/roles.guard.ts
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ROLES_KEY } from './roles.decorator';
-import { RoleType } from '../user/roles.enum';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
-
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.get<RoleType[]>(ROLES_KEY, context.getHandler());
-    if (!requiredRoles) return true;
-  
-    const request = context.switchToHttp().getRequest();
-    const user = request.user;
-  
-    if (!user?.role) {
-      console.error('User role is missing in the request:', user); 
-      throw new ForbiddenException('Missing user role'); //rolü yetmiyorsa buradaki hatayı yazdırıyorum
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>('roles', [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!requiredRoles) {
+      return true;
     }
-  
+    const { user } = context.switchToHttp().getRequest();
     return requiredRoles.includes(user.role);
   }
 }
+// burası kısaca kullanıcdan aldığı rolü "roleid'sini" roles tablosundan yani roller tablosundan hangi role karşılık geldiğine bakıyor
