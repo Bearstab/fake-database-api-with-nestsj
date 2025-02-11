@@ -1,27 +1,28 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './user/entities/user.entity';
-import { UserRole } from './user/entities/user-role.entity';
-import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { UsersEntity } from './users/entities/users.entity';
+import { RolesEntity } from './users/entities/roles.entity';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: '123',
-      database: 'denemev2',
-      entities: [User, UserRole],
+      port: 5433,
+      username: "postgres",
+      password: "123",
+      database: "users",
+      entities: [UsersEntity, RolesEntity],
       synchronize: true,
     }),
     AuthModule,
-    UserModule,
+    UsersModule,
   ],
 })
 export class AppModule {}
-
-// postgresql kullanabilmemiz için typeorm modülünü importladık ve @module içerisinde oluşturduğumuz (denemev2) database bilgilerini girdim
-// deneme olarak ayrı bir yerde database açtım ve oradaki tabloları ve verileri kullanmak için denemev2 database ini bağladım
+//usersentity ve rolesentity olarak değiştirdim userrole kafa karıştırıyordu
+//db ismi users olarak değişti ve postgre17 kullanıyor artık
